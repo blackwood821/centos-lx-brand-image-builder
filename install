@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2017 Joyent Inc., All rights reserved.
 #
-# Install CentOS into a directory, modify the installation, then tar it up.
+# Install RHEL into a directory, modify the installation, then tar it up.
 #
 
 if [[ -n "$TRACE" ]]; then
@@ -19,20 +19,26 @@ BUILD_DATE=$(date +%Y%m%d)
 export PATH=$PATH:/sbin:/bin
 
 usage() {
+	# CentOS invocation example
+	# $0 -d /data/chroot -m http://mirror.centos.org/centos/6/os/x86_64/Packages -r centos-release-6-6.el6.centos.12.2.x86_64.rpm -i lx-centos-6 -p "CentOS 6.6 LX Brand" -D "CentOS 6.6 64-bit lx-brand image." -u https://docs.joyent.com/images/container-native-linux
 cat <<EOF
 
-Install and modify CentOS in a given directory in a given directory using a given mirror
+Install and modify RHEL in a given directory in a given directory using a given mirror
 
 Usage:
   $0 -d <INSTALL_DIR> -m <MIRROR> -r <RELEASE_PACKAGE> -i <IMAGE_NAME> -p <NAME> -D <DESC> -u <DOCS>
 
-Example:
-  $0 -d /data/chroot -m http://mirror.centos.org/centos/6/os/x86_64/Packages -r centos-release-6-6.el6.centos.12.2.x86_64.rpm -i lx-centos-6 -p "CentOS 6.6 LX Brand" -D "CentOS 6.6 64-bit lx-brand image." -u https://docs.joyent.com/images/container-native-linux
+Example invocation using a mirror site to download the redhat-release rpm:
+  $0 -d /data/chroot -m https://access.cdn.redhat.com//content/origin/rpms/redhat-release-server/7.4/18.el7/fd431d51 -r redhat-release-server-7.4-18.el7.x86_64.rpm -a "_auth_=1519933726_bb24fee620873fc44c2576d565fdcbd7" -i lx-redhat-7 -p "RedHat 7.4 LX Brand" -D "RedHat 7.4 64-bit lx-brand image."
+  
+Example invocation NOT using a mirror site to download the redhat-release rpm:
+  $0 -d /opt/chroot -r redhat-release-server-7.4-18.el7.x86_64.rpm -i lx-redhat-7 -p "RedHat 7.4 LX Brand" -D "RedHat 7.4 64-bit lx-brand image."
 
 OPTIONS:
   -d A path to the install directory
-  -m A URL for the desired archive mirror
-  -r The release package used for installing CentOS
+  -m A URL for the desired archive mirror in which the redhat-release rpm will be fetched from
+  -a Authentication URL params for rpm mirror (eg. "_auth_=<redhat_customer_portal_auth_token>")
+  -r The filename of the redhat-release rpm used for installing RedHat
   -i The name of the image. This is used for naming the tarball.
   -p The proper name of the image. Use quotes. This is used in the MOTD and /etc/product file.
   -D A description for the image. This is used in the image manifest and the /etc/product file.
@@ -44,13 +50,14 @@ EOF
 
 INSTALL_DIR=
 MIRROR=
+MIRROR_AUTH_PARAMS=
 RELEASE_PACKAGE=
 IMAGE_NAME=
 NAME=
 DESC=
 DOCS=
 
-while getopts "hd:m:r:i:p:D:u:" OPTION
+while getopts "hd:m:a:r:i:p:D:u:" OPTION
 do
 	case $OPTION in
 		h)
@@ -62,6 +69,9 @@ do
 			;;
 		m)
 			MIRROR=${OPTARG}
+			;;
+		a)
+			MIRROR_AUTH_PARAMS=${OPTARG}
 			;;
 		r)
 		  RELEASE_PACKAGE=${OPTARG}
@@ -100,10 +110,10 @@ if [[ -z ${INSTALL_DIR} ]]; then
 	exit 1
 fi
 
-if [[ -z ${MIRROR} ]]; then
-	echo "Error: missing mirror (-m) value"
-	exit 1
-fi
+# if [[ -z ${MIRROR} ]]; then
+# 	echo "Error: missing mirror (-m) value"
+# 	exit 1
+# fi
 
 if [[ -z ${RELEASE_PACKAGE} ]]; then
 	echo "Error: missing release package (-r) value"
@@ -131,44 +141,87 @@ if [[ -z ${DOCS} ]]; then
 	DOCS="https://docs.joyent.com/images/container-native-linux"
 fi
 
-echo "==> Installing CentOS into $INSTALL_DIR"
+echo "==> Installing RHEL into $INSTALL_DIR"
 
 if [[ -d $INSTALL_DIR ]]; then
 	echo "====> Found previous chroot. Deleting and creating a new one."
 	rm -rf $INSTALL_DIR
 	mkdir -p $INSTALL_DIR
-	mkdir -p $INSTALL_DIR/var/lib/rpm
+	# mkdir -p $INSTALL_DIR/var/lib/rpm
 fi
 
-rpm --rebuilddb --root=$INSTALL_DIR
+# rpm --rebuilddb --root=$INSTALL_DIR
+# initialize rpm database
+rpm --root $INSTALL_DIR --initdb
 
-echo "==> Getting $RELEASE_PACKAGE..."
-curl -sS -o /var/tmp/$RELEASE_PACKAGE $MIRROR/$RELEASE_PACKAGE
+# fetch OS release rpm via mirror
+if [ -n "${MIRROR}" ]; then
+	echo "==> Getting $RELEASE_PACKAGE from mirror..."
+	rc=
+	# support optional mirror authentication URL params
+	if [[ -n ${MIRROR_AUTH_PARAMS} ]]; then
+		curl -sS --fail -o /var/tmp/$RELEASE_PACKAGE $MIRROR/$RELEASE_PACKAGE?$MIRROR_AUTH_PARAMS
+		rc=$?
+	else
+		curl -sS --fail -o /var/tmp/$RELEASE_PACKAGE $MIRROR/$RELEASE_PACKAGE
+		rc=$?
+	fi
 
-echo "==> Downloading and installing signing keys"
-RELEASES=( 6 7 )
-URL=https://www.centos.org/keys
+	# exit if the redhat-release rpm fetch failed
+	[ $rc -ne 0 ] && exit $rc
+# download OS release rpm via yum
+else
+	echo "==> Getting redhat-release rpm..."
+	# download and install the redhat-release package, it contains our repository sources
+	yum --noplugins reinstall --downloadonly --downloaddir . redhat-release
+	mv redhat-release*.rpm /var/tmp/$RELEASE_PACKAGE
+fi
 
-for RELEASE in "${RELEASES[@]}"; do
-	curl -sS -o /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-$RELEASE $URL/RPM-GPG-KEY-CentOS-$RELEASE
-done
-rpm --import /etc/pki/rpm-gpg/*
+# echo "==> Downloading and installing signing keys"
+# RELEASES=( 6 7 )
+# URL=https://www.centos.org/keys
 
-echo "==> Veryfying $RELEASE_PACKAGE..."
+# for RELEASE in "${RELEASES[@]}"; do
+# 	curl -sS -o /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-$RELEASE $URL/RPM-GPG-KEY-CentOS-$RELEASE
+# done
+# rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
+
+echo "==> Verifying $RELEASE_PACKAGE..."
 rpm -K /var/tmp/$RELEASE_PACKAGE
 
 echo "==> Installing rpm package..."
-rpm -i --root=$INSTALL_DIR --nodeps /var/tmp/$RELEASE_PACKAGE
+rpm -ivh --root=$INSTALL_DIR --nosignature /var/tmp/$RELEASE_PACKAGE
+rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
+
+# install yum without docs and install only the english language files during the process
+# NOTE: the below command will likely result in the following error message:
+# 		"This system is not registered with an entitlement server. You can use subscription-manager to register."
+# but it still seems to continue so it should be able to be ignored but for some reason it wasn't able
+# to be ignored on the rest of the "yum --installroot" calls below
+# don't set the "override_install_langs" flag so that all the locales get installed
+# don't set the "nodocs" flag so that man pages get installed
+# yum --installroot=$INSTALL_DIR --noplugins --setopt=tsflags='nodocs' --setopt=override_install_langs=en_US.utf8 -y install yum
+yum --installroot=$INSTALL_DIR --noplugins -y install yum
+
+# It seems that after the Core group is installed you can't install any more packages
+# unless you copy /etc/yum.repos.d/redhat.repo to $INSTALL_DIR/etc/yum.repos.d/
+# otherwise yum complains and says that there are no repos. I'm not sure how
+# installing yum and the Core group work before this though.
+echo "==> Cloning yum redhat.repo file..."
+[ -f "$INSTALL_DIR/etc/yum.repos.d/redhat.repo" ] && {
+	mv $INSTALL_DIR/etc/yum.repos.d/redhat.repo $INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig
+}
+cp /etc/yum.repos.d/redhat.repo $INSTALL_DIR/etc/yum.repos.d/
 
 echo "==> Installing Core package group..."
-yum --installroot=$INSTALL_DIR --setopt=group_package_types=mandatory \
-	-y groupinstall "Core"
+yum --installroot=$INSTALL_DIR --noplugins --setopt=group_package_types=mandatory -y groupinstall "Core"
 
-echo "==> Setting TZ to UTC"
+echo "==> Setting TZ to PST"
 if [[ -f $INSTALL_DIR/etc/localtime ]]; then
 	rm $INSTALL_DIR/etc/localtime
 fi
-cp $INSTALL_DIR/usr/share/zoneinfo/UTC $INSTALL_DIR/etc/localtime
+# cp $INSTALL_DIR/usr/share/zoneinfo/UTC $INSTALL_DIR/etc/localtime
+ln -s $INSTALL_DIR/usr/share/zoneinfo/America/Los_Angeles $INSTALL_DIR/etc/localtime
 
 # Set locale.
 # CentOS 6 does not have a /etc/os-release file
@@ -177,23 +230,30 @@ if [[ -f $INSTALL_DIR/etc/os-release ]]; then
 	# Set locale for CentOS 7 and up using /etc/locale.conf
 	# shellcheck source=/dev/null
 	CHECK_VERSION=$(. $INSTALL_DIR/etc/os-release && echo $VERSION_ID)
-	if [[ "$CHECK_VERSION" -ge 7 ]]; then
+	if [[ "${CHECK_VERSION%.*}" -ge 7 ]]; then
 		echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/locale.conf
-	fi
+	fix
 else
 	# Assume this must be CentOS 6 or earlier so we use /etc/sysconfig/i18n
 	echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/sysconfig/i18n
 fi
 
 echo "==> Installing Base package group and additional packages..."
-yum --installroot=$INSTALL_DIR -y groupinstall "Base"
-yum --installroot=$INSTALL_DIR -y install gettext
+# use the --noplugins flag so that we don't see the following warning from the subscription-manager plugin:
+# 	"This system is not registered with an entitlement server. You can use subscription-manager to register."
+yum --installroot=$INSTALL_DIR --noplugins -y groupinstall "Base"
+yum --installroot=$INSTALL_DIR --noplugins -y install gettext # procps-ng iputils
 
 echo "==> Updating packages..."
-yum --installroot=$INSTALL_DIR -y update
+yum --installroot=$INSTALL_DIR --noplugins -y update
 
 echo "==> Cleaning up yum cache..."
-yum --installroot=$INSTALL_DIR clean all
+yum --installroot=$INSTALL_DIR --noplugins clean all
+
+[ -f "$INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig" ] && {
+	echo "==> Restoring original yum redhat.repo file..."
+	mv -f $INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig $INSTALL_DIR/etc/yum.repos.d/redhat.repo
+}
 
 echo "==> Removing /var/tmp/$RELEASE_PACKAGE"
 rm -rf /var/tmp/$RELEASE_PACKAGE
@@ -204,12 +264,12 @@ if [[ -f $INSTALL_DIR/etc/os-release ]]; then
 	# shellcheck source=/dev/null
 	CHECK_VERSION=$(. $INSTALL_DIR/etc/os-release && echo $VERSION_ID)
 
-	if [[ "$CHECK_VERSION" -ge 7 ]]; then
+	if [[ "${CHECK_VERSION%.*}" -ge 7 ]]; then
 		# Systemd overrides in CentOS 7 and newer
 		#
 		# See:
 		#   - https://github.com/joyent/centos-lx-brand-image-builder/issues/5
-  	#   - https://github.com/joyent/centos-lx-brand-image-builder/issues/7
+  		#   - https://github.com/joyent/centos-lx-brand-image-builder/issues/7
 		#   - https://smartos.org/bugview/OS-5304
 		#
 		# TODO: This should be removed when the relevant cgroup etc support is in
@@ -248,13 +308,15 @@ OVERRIDE
 	fi
 fi
 
-echo "==> Disabling PasswordAuthentication"
-sed -ri s/^#?PasswordAuthentication\ no/PasswordAuthentication\ no/ -i $INSTALL_DIR/etc/ssh/sshd_config
-sed -ri s/^#?PasswordAuthentication\ yes/PasswordAuthentication\ no/ -i $INSTALL_DIR/etc/ssh/sshd_config
+# NOTE: commented out the below code because SSH is not installed now that we can't install
+# the additional yum packages and package groups
+# echo "==> Disabling PasswordAuthentication"
+# sed -ri s/^#?PasswordAuthentication\ no/PasswordAuthentication\ no/ -i $INSTALL_DIR/etc/ssh/sshd_config
+# sed -ri s/^#?PasswordAuthentication\ yes/PasswordAuthentication\ no/ -i $INSTALL_DIR/etc/ssh/sshd_config
 
-echo "==> Setting UsePrivilegeSeparation"
-# The sandbox value causes an issue with lx-brand. Change to "yes"
-sed s/UsePrivilegeSeparation\ sandbox/UsePrivilegeSeparation\ yes/ -i $INSTALL_DIR/etc/ssh/sshd_config
+# echo "==> Setting UsePrivilegeSeparation"
+# # The sandbox value causes an issue with lx-brand. Change to "yes"
+# sed s/UsePrivilegeSeparation\ sandbox/UsePrivilegeSeparation\ yes/ -i $INSTALL_DIR/etc/ssh/sshd_config
 
 echo "==> Creating /etc/motd"
 cat << MOTD > $INSTALL_DIR/etc/motd
