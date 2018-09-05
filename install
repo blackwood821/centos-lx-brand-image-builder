@@ -232,7 +232,7 @@ if [[ -f $INSTALL_DIR/etc/os-release ]]; then
 	CHECK_VERSION=$(. $INSTALL_DIR/etc/os-release && echo $VERSION_ID)
 	if [[ "${CHECK_VERSION%.*}" -ge 7 ]]; then
 		echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/locale.conf
-	fix
+	fi
 else
 	# Assume this must be CentOS 6 or earlier so we use /etc/sysconfig/i18n
 	echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/sysconfig/i18n
