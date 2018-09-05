@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2017 Joyent Inc., All rights reserved.
 #
-# Install RHEL into a directory, modify the installation, then tar it up.
+# Install OUEL into a directory, modify the installation, then tar it up.
 #
 
 if [[ -n "$TRACE" ]]; then
@@ -23,22 +23,22 @@ usage() {
 	# $0 -d /data/chroot -m http://mirror.centos.org/centos/6/os/x86_64/Packages -r centos-release-6-6.el6.centos.12.2.x86_64.rpm -i lx-centos-6 -p "CentOS 6.6 LX Brand" -D "CentOS 6.6 64-bit lx-brand image." -u https://docs.joyent.com/images/container-native-linux
 cat <<EOF
 
-Install and modify RHEL in a given directory in a given directory using a given mirror
+Install and modify OUEL in a given directory in a given directory using a given mirror
 
 Usage:
   $0 -d <INSTALL_DIR> -m <MIRROR> -r <RELEASE_PACKAGE> -i <IMAGE_NAME> -p <NAME> -D <DESC> -u <DOCS>
 
-Example invocation using a mirror site to download the redhat-release rpm:
-  $0 -d /data/chroot -m https://access.cdn.redhat.com//content/origin/rpms/redhat-release-server/7.4/18.el7/fd431d51 -r redhat-release-server-7.4-18.el7.x86_64.rpm -a "_auth_=1519933726_bb24fee620873fc44c2576d565fdcbd7" -i lx-redhat-7 -p "RedHat 7.4 LX Brand" -D "RedHat 7.4 64-bit lx-brand image."
+Example invocation using a mirror site to download the oraclelinux-release rpm:
+  $0 -d /data/chroot -m http://yum.oracle.com/repo/OracleLinux/OL7/latest/x86_64/getPackage -r oraclelinux-release-7.5-1.0.5.el7.x86_64.rpm -i lx-ouel-7 -p "Oracle Linux 7.4 LX Brand" -D "Oracle Linux 7.4 64-bit lx-brand image."
   
-Example invocation NOT using a mirror site to download the redhat-release rpm:
-  $0 -d /opt/chroot -r redhat-release-server-7.4-18.el7.x86_64.rpm -i lx-redhat-7 -p "RedHat 7.4 LX Brand" -D "RedHat 7.4 64-bit lx-brand image."
+Example invocation NOT using a mirror site to download the oraclelinux-release rpm:
+  $0 -d /opt/chroot -r oraclelinux-release.x86_64.rpm -i lx-ouel-7 -p "Oracle Linux 7.4 LX Brand" -D "Oracle Linux 7.4 64-bit lx-brand image."
 
 OPTIONS:
   -d A path to the install directory
-  -m A URL for the desired archive mirror in which the redhat-release rpm will be fetched from
-  -a Authentication URL params for rpm mirror (eg. "_auth_=<redhat_customer_portal_auth_token>")
-  -r The filename of the redhat-release rpm used for installing RedHat
+  -m A URL for the desired archive mirror in which the oraclelinux-release rpm will be fetched from
+  -a Authentication URL params for rpm mirror (eg. "_auth_=<oracle_auth_token>")
+  -r The filename of the oraclelinux-release rpm used for installing Oracle Linux
   -i The name of the image. This is used for naming the tarball.
   -p The proper name of the image. Use quotes. This is used in the MOTD and /etc/product file.
   -D A description for the image. This is used in the image manifest and the /etc/product file.
@@ -141,7 +141,7 @@ if [[ -z ${DOCS} ]]; then
 	DOCS="https://docs.joyent.com/images/container-native-linux"
 fi
 
-echo "==> Installing RHEL into $INSTALL_DIR"
+echo "==> Installing OUEL into $INSTALL_DIR"
 
 if [[ -d $INSTALL_DIR ]]; then
 	echo "====> Found previous chroot. Deleting and creating a new one."
@@ -167,14 +167,14 @@ if [ -n "${MIRROR}" ]; then
 		rc=$?
 	fi
 
-	# exit if the redhat-release rpm fetch failed
+	# exit if the oraclelinux-release rpm fetch failed
 	[ $rc -ne 0 ] && exit $rc
 # download OS release rpm via yum
 else
-	echo "==> Getting redhat-release rpm..."
-	# download and install the redhat-release package, it contains our repository sources
-	yum --noplugins reinstall --downloadonly --downloaddir . redhat-release
-	mv redhat-release*.rpm /var/tmp/$RELEASE_PACKAGE
+	echo "==> Getting oraclelinux-release rpm..."
+	# download and install the oraclelinux-release package, it contains our repository sources
+	yum --noplugins reinstall --downloadonly --downloaddir . oraclelinux-release
+	mv oraclelinux-release*.rpm /var/tmp/$RELEASE_PACKAGE
 fi
 
 # echo "==> Downloading and installing signing keys"
@@ -204,14 +204,14 @@ rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
 yum --installroot=$INSTALL_DIR --noplugins -y install yum
 
 # It seems that after the Core group is installed you can't install any more packages
-# unless you copy /etc/yum.repos.d/redhat.repo to $INSTALL_DIR/etc/yum.repos.d/
+# unless you copy /etc/yum.repos.d/public-yum-ol7.repo to $INSTALL_DIR/etc/yum.repos.d/
 # otherwise yum complains and says that there are no repos. I'm not sure how
 # installing yum and the Core group work before this though.
-echo "==> Cloning yum redhat.repo file..."
-[ -f "$INSTALL_DIR/etc/yum.repos.d/redhat.repo" ] && {
-	mv $INSTALL_DIR/etc/yum.repos.d/redhat.repo $INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig
+echo "==> Cloning yum public-yum-ol7.repo file..."
+[ -f "$INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo" ] && {
+	mv $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig
 }
-cp /etc/yum.repos.d/redhat.repo $INSTALL_DIR/etc/yum.repos.d/
+cp /etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/
 
 echo "==> Installing Core package group..."
 yum --installroot=$INSTALL_DIR --noplugins --setopt=group_package_types=mandatory -y groupinstall "Core"
@@ -250,9 +250,9 @@ yum --installroot=$INSTALL_DIR --noplugins -y update
 echo "==> Cleaning up yum cache..."
 yum --installroot=$INSTALL_DIR --noplugins clean all
 
-[ -f "$INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig" ] && {
-	echo "==> Restoring original yum redhat.repo file..."
-	mv -f $INSTALL_DIR/etc/yum.repos.d/redhat.repo.orig $INSTALL_DIR/etc/yum.repos.d/redhat.repo
+[ -f "$INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig" ] && {
+	echo "==> Restoring original yum public-yum-ol7.repo file..."
+	mv -f $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo
 }
 
 echo "==> Removing /var/tmp/$RELEASE_PACKAGE"
