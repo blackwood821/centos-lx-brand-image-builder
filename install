@@ -171,10 +171,15 @@ if [ -n "${MIRROR}" ]; then
 	[ $rc -ne 0 ] && exit $rc
 # download OS release rpm via yum
 else
+	echo "==> Getting redhat-release rpm..."
+	# download and install the redhat-release package, it contains our repository sources
+	yum --noplugins reinstall --downloadonly --downloaddir . redhat-release
+	mv redhat-release*.rpm /var/tmp/
+
 	echo "==> Getting oraclelinux-release rpm..."
 	# download and install the oraclelinux-release package, it contains our repository sources
 	yum --noplugins reinstall --downloadonly --downloaddir . oraclelinux-release
-	mv oraclelinux-release*.rpm /var/tmp/$RELEASE_PACKAGE
+	mv oraclelinux-release*.rpm /var/tmp/
 fi
 
 # echo "==> Downloading and installing signing keys"
@@ -186,11 +191,11 @@ fi
 # done
 # rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
 
-echo "==> Verifying $RELEASE_PACKAGE..."
-rpm -K /var/tmp/$RELEASE_PACKAGE
+echo "==> Verifying oraclelinux-release and redhat-release rpms..."
+rpm -K /var/tmp/*.rpm
 
 echo "==> Installing rpm package..."
-rpm -ivh --root=$INSTALL_DIR --nosignature /var/tmp/$RELEASE_PACKAGE
+rpm -ivh --root=$INSTALL_DIR --nosignature --nodeps /var/tmp/*.rpm
 rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
 
 # install yum without docs and install only the english language files during the process
@@ -232,7 +237,7 @@ if [[ -f $INSTALL_DIR/etc/os-release ]]; then
 	CHECK_VERSION=$(. $INSTALL_DIR/etc/os-release && echo $VERSION_ID)
 	if [[ "${CHECK_VERSION%.*}" -ge 7 ]]; then
 		echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/locale.conf
-	fix
+	fi
 else
 	# Assume this must be CentOS 6 or earlier so we use /etc/sysconfig/i18n
 	echo "LANG=\"en_US.UTF-8\"" > $INSTALL_DIR/etc/sysconfig/i18n
@@ -255,8 +260,8 @@ yum --installroot=$INSTALL_DIR --noplugins clean all
 	mv -f $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo
 }
 
-echo "==> Removing /var/tmp/$RELEASE_PACKAGE"
-rm -rf /var/tmp/$RELEASE_PACKAGE
+echo "==> Removing /var/tmp/*.rpm"
+rm -rf /var/tmp/*.rpm
 
 # Get release version via os-release
 # CentOS 6 does not have this file
