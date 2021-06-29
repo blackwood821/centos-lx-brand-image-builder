@@ -198,6 +198,16 @@ echo "==> Installing rpm package..."
 rpm -ivh --root=$INSTALL_DIR --nosignature --nodeps /var/tmp/*.rpm
 rpm --root $INSTALL_DIR --import $INSTALL_DIR/etc/pki/rpm-gpg/*
 
+
+# This wasn't needed for OEL 7.4 but it seems to be for 7.9 to avoid the yum install below failing
+# becuase $ociregion and $ocidomain are not replaced in the URLs used to download the RPMs because 
+# /etc/yum/vars does not exist in the install dir.
+#
+# According to https://community.oracle.com/tech/apps-infra/discussion/4196548/check-your-yum-configuration-oracle-linux-yum-modularization-notice
+# the oraclelinux-release-elX package install script creates /etc/yum/vars but when I tried installing that in the install root it failed so this
+# seems to work around the issue
+cp -rp /etc/yum $INSTALL_DIR/etc/yum
+
 # install yum without docs and install only the english language files during the process
 # NOTE: the below command will likely result in the following error message:
 # 		"This system is not registered with an entitlement server. You can use subscription-manager to register."
