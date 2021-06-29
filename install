@@ -244,7 +244,7 @@ yum --installroot=$INSTALL_DIR --noplugins -y install yum
 
 # NOTE: The "\" at the beginning is necessary to temporarily unalias the "cp" command
 echo "==> Cloning /etc/yum.repo.d/*.repo files..."
-\cp -fp /etc/yum.repos.d/*.repo $INSTALL_DIR/etc/yum/repos.d/
+cp -rp /etc/yum.repos.d $INSTALL_DIR/etc/
 
 echo "==> Installing Core package group..."
 yum --installroot=$INSTALL_DIR --noplugins --setopt=group_package_types=mandatory -y groupinstall "Core"
