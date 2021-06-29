@@ -222,25 +222,29 @@ yum --installroot=$INSTALL_DIR --noplugins -y install yum
 # unless you copy /etc/yum.repos.d/public-yum-ol7.repo to $INSTALL_DIR/etc/yum.repos.d/
 # otherwise yum complains and says that there are no repos. I'm not sure how
 # installing yum and the Core group work before this though.
-if [ -f /etc/yum.repos.d/public-yum-ol7.repo ]; then
-	echo "==> Cloning yum public-yum-ol7.repo file..."
+# if [ -f /etc/yum.repos.d/public-yum-ol7.repo ]; then
+# 	echo "==> Cloning yum public-yum-ol7.repo file..."
 
-	[ -f "$INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo" ] && {
-		mv $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig
-	}
+# 	[ -f "$INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo" ] && {
+# 		mv $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/public-yum-ol7.repo.orig
+# 	}
 
-	cp /etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/
-fi
+# 	cp /etc/yum.repos.d/public-yum-ol7.repo $INSTALL_DIR/etc/yum.repos.d/
+# fi
 
-if [ -f /etc/yum.repos.d/oracle-linux-ol7.repo ]; then
-	echo "==> Cloning yum oracle-linux-ol7.repo file..."
+# if [ -f /etc/yum.repos.d/oracle-linux-ol7.repo ]; then
+# 	echo "==> Cloning yum oracle-linux-ol7.repo file..."
 
-	[ -f "$INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo" ] && {
-		mv $INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo $INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo.orig
-	}
+# 	[ -f "$INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo" ] && {
+# 		mv $INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo $INSTALL_DIR/etc/yum.repos.d/oracle-linux-ol7.repo.orig
+# 	}
 	
-	cp /etc/yum.repos.d/oracle-linux-ol7.repo $INSTALL_DIR/etc/yum.repos.d/
-fi
+# 	cp /etc/yum.repos.d/oracle-linux-ol7.repo $INSTALL_DIR/etc/yum.repos.d/
+# fi
+
+# NOTE: The "\" at the beginning is necessary to temporarily unalias the "cp" command
+echo "==> Cloning /etc/yum.repo.d/*.repo files..."
+\cp -fp /etc/yum.repos.d/*.repo $INSTALL_DIR/etc/yum/repos.d/
 
 echo "==> Installing Core package group..."
 yum --installroot=$INSTALL_DIR --noplugins --setopt=group_package_types=mandatory -y groupinstall "Core"
